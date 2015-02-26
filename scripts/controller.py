@@ -1,17 +1,15 @@
 #!/usr/bin/env python
 
 '''
-    Controller node for HW1.
+    Controller node for HW3.
 
     Listens to a ROS topic /command of type String to command the controller,
     where commands are 'scatter', 'stack_ascending', 'stack_descending'
-
-    It in turn sends commands to the MoveRobot service to get things done.
 '''
 
 import rospy
-from hw1.msg import *
-from hw1.srv import *
+from bax_hw3.msg import *
+from bax_hw3.srv import *
 from waiter import Waiter
 
 # The controller class.

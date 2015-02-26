@@ -1,0 +1,20 @@
+<!--
+
+Homework 3 Launch File
+Anthony McNicoll 2015
+
+You can get this show going by calling:
+  roslaunch bax_hw3 hw.launch
+
+Single-armed or dual-armed operation can be selected by changing the "bimanual" parameter to be either 0 (false, one-armed) or 1 (true, two-armed).
+
+Note that although this launch file launches multiple nodes, it only executes the controller. By calling other Python modules like baxter_interface, the controller node launches other nodes itself.
+
+-->
+
+<launch>
+  <node name="$(control)" pkg="bax_hw3" type="controller.py" output="screen"/>
+  <param name="num_blocks" value="6" type="int" />
+  <param name="configuration" value="stacked_descending" type="str" />
+  <param name="bimanual" value="0" type="int" />
+</launch>
