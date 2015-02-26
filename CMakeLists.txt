@@ -7,6 +7,7 @@ project(bax_hw3)
 find_package(catkin REQUIRED COMPONENTS
   message_generation
   message_runtime
+  geometry_msgs
   rospy
 )
 
@@ -64,6 +65,7 @@ add_service_files(
 # Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
+  geometry_msgs
 )
 
 ###################################
