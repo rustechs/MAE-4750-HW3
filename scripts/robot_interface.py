@@ -56,7 +56,9 @@ class Baxter():
         left_gripper_pose = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )
 
 
-    def ik_gripper(self,limbSide,gripperPose):
+    def ik_gripper(self, limbSide, setPose):
+        # self.ik_gripper(string, "Pose" msg type)
+
         # Set up the service proxy for sending commands to robot
         rospy.init_node("gripper_ik_service_client")
 
@@ -65,25 +67,29 @@ class Baxter():
         ikreq = SolvePositionIKRequest()
 
         hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-        PoseStamped(header=hdr,pose=gripperPose,)  #??? "," after "pose=gripperPose"?
+        PoseStamped(header=hdr,pose=setPose,)  #??? "," after "pose=gripperPose"?
         ikreq.pose_stamp.append(PoseStamped)
+
 
         try:
             rospy.wait_for_service(ns, 5.0)
             resp = iksvc(ikreq)
-        except (rospy.ServiceException, rospy.ROSException), e:
-            rospy.logerr("Service call failed: %s" % (e,))
-            return 1
 
-if (resp.isValid[0]):
-        print("SUCCESS - Valid Joint Solution Found:")
-        # Format solution into Limb API-compatible dictionary
-        limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
-        print limb_joints
-    else:
-        print("INVALID POSE - No Valid Joint Solution Found.")
- 
-    return 0    
+        except (rospy.ServiceException, rospy.ROSException), e:
+            rospy.logerr("IK Service call failed: %s" % (e,))
+            return 1   #???
+
+
+        if (resp.isValid[0]):
+                print("IK service: SUCCESS - Valid Joint Solution Found:")
+                # Format solution into Limb API-compatible dictionary
+                limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
+                print limb_joints
+                return limb_joints
+            else:
+                print("IK service: INVALID POSE - No Valid Joint Solution Found.")
+         
+            return 0  #???   
 
 
 
