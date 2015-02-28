@@ -5,11 +5,15 @@
 
     Listens to a ROS topic /command of type String to command the controller,
     where commands are 'scatter', 'stack_ascending', 'stack_descending'
+
+    Implements an internal model of the system (block set) in order to plan
+    moves and coordinate limb motion.
 '''
 
 import rospy
 from bax_hw3.msg import *
 from bax_hw3.srv import *
+from geometry_msgs.msg import Point, Quaternion, Pose
 from waiter import Waiter
 
 # The controller class.
