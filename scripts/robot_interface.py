@@ -23,13 +23,18 @@ class Baxter():
     # Method for on-lining baxter
     # All required calls from baxter_interface
     def __init__(self):
-        self.start #What does start do???
+        self.start #???
 
-        # How do we distinguish left hand and right hand ???
-        gripper = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )
+        baxter_interface.RobotEnable() #??? This is the API responsible for enabling/disabling the robot, as well as running version verification
 
         right_arm = baxter_interface.Limb('right')
         left_arm = baxter_interface.Limb('left')
+
+        right_gripper = baxter_interface.Gripper('right')
+        left_gripper = baxter_interface.Gripper('left')
+
+        right_gripper_pose = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )    # our "Pose" message 
+        left_gripper_pose = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )
 
 
     # Method for getting joint configuration
@@ -39,11 +44,11 @@ class Baxter():
         # unordered dict of joint name Keys to angle (rad) Values
 
         if limbSide == 'left':
-            self.leftCongif = left_arm.joint_angles()
-            return self.leftCongif
+            self.leftAngles = left_arm.joint_angles()
+            return self.leftAngles       #??? return the joints dictionary right?
         elif limbSide == 'right':
-            self.rightCongif = right_arm.joint_angles()
-            return self.rightCongif
+            self.rightAngles = right_arm.joint_angles()
+            return self.rightAngles
         else:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
 
@@ -52,14 +57,12 @@ class Baxter():
     # Uses forward kinematics ROS library, TF
     # Angular pose will always be top-down, so wrist-gripper displacement doesn't have to be factored in
     def getEndPose(self,limbSide):
-        # pose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
+        # left_arm.endpoint_pose(): pose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
 
         if limbSide == 'left':
-            self.leftEndPose = left_arm.endpoint_pose()
-            return self.leftEndPose
+            right_gripper_pose = left_arm.endpoint_pose()    #??? return to pose message Right?
         elif limbSide == 'right':
-            self.rightEndPose = right_arm.endpoint_pose()
-            return self.rightEndPose
+            left_gripper_pose = right_arm.endpoint_pose()
         else:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
 
@@ -68,17 +71,18 @@ class Baxter():
     # Method for setting joint positions
     # Direct call to baxter_interface
     # set_left and set_right are dict({str:float}), same size as joint angles
-    def setJoints(self,limbSide,set_positions):
+    def setJoints(self,limbSide,angles):
         # set_joint_positions(self, positions, raw=False)
         # positions (dict({str:float})) - joint_name:angle command
         # raw (bool) - advanced, direct position control mode
 
         if limbSide == 'left':
-            left_arm.move_to_joint_positions(set_positions,raw=False)
+            left_arm.move_to_joint_positions(angles,raw=False)
         elif limbSide == 'right':
-            right_arm.move_to_joint_positions(set_positions,raw=False)
+            right_arm.move_to_joint_positions(angles,raw=False)
         else:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+
 
 
     # Method for setting cartesian position of hand
@@ -88,43 +92,3 @@ class Baxter():
 
         self.setEndPose('left') = left_arm.
         self.setEndPose('right') = right_arm.
-
-
-
-
-
-
-
-
-# Or Class robot_interface ???
-def robot_interface():
-
-    
-
-    # Declare that we'll be publishing to the state topic
-    self.statePub = rospy.Publisher('state', State, queue_size = 10)
-    self.statePub = rospy.Publisher('state', State, queue_size = 10)
-
-
-    # Declare that we'll be handling the MoveRobot service
-    rospy.Service('pick_place', PickPlace, self.handlePickPlace)
-
-
-    # Initializes the node (connects to roscore)
-    # Setting anonymous to True guaruntees unique node name
-    rospy.init_node('robot_interface_node', anonymous = True)
-
-
-
-
-    # This callback function is an implementation of Pick and Place
-    def handlePickPlace(source, destination):
-        
-
-# This is what runs when the script is executed externally.
-# It runs the main node function, and catches exceptions.
-if __name__ == '__main__':
-    try:
-        robot_interface()
-    except rospy.ROSInterruptException:
-        pass
