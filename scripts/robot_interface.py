@@ -8,11 +8,31 @@
     *Pick-and-place routine that accepts source and destination coordinates
 '''
 
+import argparse  #IK service?
+import sys       #IK serivce?
+
 import rospy
 import baxter_interface
-import tf2_ros
-# import roslib
+
 from bax_hw3.msg import *
+
+
+
+from geometry_msgs.msg import (
+    PoseStamped,
+    Pose,
+    Point,
+    Quaternion,
+)
+
+
+
+from baxter_core_msgs.srv import (
+    SolvePositionIK,
+    SolvePositionIKRequest,
+)
+
+
 # from bax_hw3.srv import *
 # from waiter import Waiter
 
@@ -22,11 +42,10 @@ class Baxter():
 
     # Method for on-lining baxter
     # All required calls from baxter_interface
-    def __init__(self):
-        self.start #???
+    def __init__(self, baxter_name):
 
-        baxter_interface.RobotEnable() #??? This is the API responsible for enabling/disabling the robot, as well as running version verification
-
+        self.name = baxter_name;
+        
         right_arm = baxter_interface.Limb('right')
         left_arm = baxter_interface.Limb('left')
 
@@ -35,6 +54,52 @@ class Baxter():
 
         right_gripper_pose = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )    # our "Pose" message 
         left_gripper_pose = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )
+
+
+    def ik_gripper(self,limbSide,gripperPose):
+        # Set up the service proxy for sending commands to robot
+        rospy.init_node("gripper_ik_service_client")
+
+        ns = "ExternalTools/" + limbSide + "/PositionKinematicsNode/IKService"
+        iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
+        ikreq = SolvePositionIKRequest()
+
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        PoseStamped(header=hdr,pose=gripperPose,)  #??? "," after "pose=gripperPose"?
+        ikreq.pose_stamp.append(PoseStamped)
+
+        try:
+            rospy.wait_for_service(ns, 5.0)
+            resp = iksvc(ikreq)
+        except (rospy.ServiceException, rospy.ROSException), e:
+            rospy.logerr("Service call failed: %s" % (e,))
+            return 1
+
+if (resp.isValid[0]):
+        print("SUCCESS - Valid Joint Solution Found:")
+        # Format solution into Limb API-compatible dictionary
+        limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
+        print limb_joints
+    else:
+        print("INVALID POSE - No Valid Joint Solution Found.")
+ 
+    return 0    
+
+
+
+    # Method for setting cartesian position of hand
+    # Uses some sort of external IK engine - dunno where
+    # Would be great if it could be made non-blocking for bimanual operation
+    def setEndPose(self,pose_msg):
+
+        #I will expect pose_msg to looks like {'position': (x, y, z), 'orientation': (x, y, z, w)}
+
+        self.setEndPose('left') = left_arm.
+        self.setEndPose('right') = right_arm.
+
+
+    def enable(self):
+        baxter_interface.RobotEnable() #??? This is the API responsible for enabling/disabling the robot, as well as running version verification
 
 
     # Method for getting joint configuration
@@ -82,13 +147,3 @@ class Baxter():
             right_arm.move_to_joint_positions(angles,raw=False)
         else:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
-
-
-
-    # Method for setting cartesian position of hand
-    # Uses some sort of external IK engine - dunno where
-    # Would be great if it could be made non-blocking for bimanual operation
-    def setEndPose(self,poseL,poseR):
-
-        self.setEndPose('left') = left_arm.
-        self.setEndPose('right') = right_arm.
