@@ -24,9 +24,6 @@ from baxter_core_msgs.srv import (
 )
 
 
-# from bax_hw3.srv import *
-# from waiter import Waiter
-
 
 # The baxter class.
 class Baxter():
@@ -39,25 +36,37 @@ class Baxter():
         self.enable()
         
         #Arm Objects
-        right_arm = baxter_interface.Limb('right')
-        left_arm = baxter_interface.Limb('left')
+        self.right_arm = baxter_interface.Limb('right')
+        self.left_arm = baxter_interface.Limb('left')
 
         #Gripper Objects
-        right_gripper = baxter_interface.Gripper('right')
-        left_gripper = baxter_interface.Gripper('left')
-
-        # Creat Gripper Pose message
-        right_gripper_pose = Pose( Point(1,1,3), Quaternion(0,1,0, pi/2) )   #!!! is Point(1,1,3) a good starting point?
-        left_gripper_pose = Pose( Point(1,1,3), Quaternion(0,1,0, pi/2) )
-
-        #Initialize Gripper Pose
-        self.setEndPose(self, "right", right_gripper_pose)     #??? How do we avoid grippers hit each other?
-        self.setEndPose(self, "left", left_gripper_pose)
+        self.right_gripper = baxter_interface.Gripper('right')
+        self.left_gripper = baxter_interface.Gripper('left')
 
 
+        rospy.init_node("gripper_ik_service_client")
+
+        self.nsL = "ExternalTools/left/PositionKinematicsNode/IKService"
+        self.nsR = "ExternalTools/right/PositionKinematicsNode/IKService"
+        self.iksvcL = rospy.ServiceProxy(self.nsL, SolvePositionIK)
+        self.iksvcR = rospy.ServiceProxy(self.nsR, SolvePositionIK)
+
+        rospy.wait_for_service(self.nsL)  #Wait for services to be exist
+        rospy.wait_for_service(self.nsR)
+
+        self.ikreq = SolvePositionIKRequest()
+
+        self.zero()
+        
 
     def enable(self):
         baxter_interface.RobotEnable() #??? This is the API responsible for enabling/disabling the robot, as well as running version verification
+
+
+    #Set up the All parameters for Right Gripper Pose to 0
+    def zero(self):
+        #Initialize Gripper Pose
+        self.setEndPose(self, "right", Pose( Point(0,0,0), Quaternion(0,0,0,0))
 
 
     # Method for getting joint configuration
@@ -65,15 +74,16 @@ class Baxter():
     def getJoints(self,limbSide):
         # Returns: dict({str:float})
         # unordered dict of joint name Keys to angle (rad) Values
-
-        if limbSide == 'left':
-            self.leftAngles = left_arm.joint_angles()
-            return self.leftAngles       #??? return the joints dictionary right?
-        elif limbSide == 'right':
-            self.rightAngles = right_arm.joint_angles()
-            return self.rightAngles
-        else:
+        try
+            if limbSide == 'left':
+                return self.left_arm.joint_angles()
+            elif limbSide == 'right':
+                return self.right_arm.joint_angles()
+            else:
+                raise
+        except:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+            raise
 
 
     # Method for getting end-effector position
@@ -81,13 +91,16 @@ class Baxter():
     # Angular pose will always be top-down, so wrist-gripper displacement doesn't have to be factored in
     def getEndPose(self,limbSide):
         # left_arm.endpoint_pose(): pose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
-
-        if limbSide == 'left':
-            right_gripper_pose = left_arm.endpoint_pose()    #??? return to pose message Right?
-        elif limbSide == 'right':
-            left_gripper_pose = right_arm.endpoint_pose()
-        else:
+        try:
+            if limbSide == 'left':
+                return self.left_arm.endpoint_pose() 
+            elif limbSide == 'right':
+                return self.right_arm.endpoint_pose()
+            else: 
+                raise
+        except:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+            raise
 
 
     # Method for setting joint positions
@@ -98,43 +111,52 @@ class Baxter():
         # positions (dict({str:float})) - joint_name:angle command
         # raw (bool) - advanced, direct position control mode
 
-        if limbSide == 'left':
-            left_arm.move_to_joint_positions(angles,raw=False)
-        elif limbSide == 'right':
-            right_arm.move_to_joint_positions(angles,raw=False)
-        else:
+        try:
+            if limbSide == 'left':
+                self.left_arm.move_to_joint_positions(angles,raw=False)
+            elif limbSide == 'right':
+                self.right_arm.move_to_joint_positions(angles,raw=False)
+            else:
+                raise
+        except:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+            raise
 
 
-    def ik_gripper(self, limbSide, setPose):
+    # Method for calculating joint angles given a desired end-effector pose
+    def getIKGripper(self, limbSide, setPose):
         # self.ik_gripper(string, "Pose" msg type)
 
-        rospy.init_node("gripper_ik_service_client")
-
-        ns = "ExternalTools/" + limbSide + "/PositionKinematicsNode/IKService"
-        iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
-        ikreq = SolvePositionIKRequest()
-
-        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-        PoseStamped(header=hdr,pose=setPose,)  #??? "," after "pose=gripperPose"?
-        ikreq.pose_stamp.append(PoseStamped)
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')    #??? 'what's their base frame???
+        PoseStamped(header=hdr,pose=setPose,)
+        self.ikreq.pose_stamp.append(PoseStamped)
 
         try:
-            rospy.wait_for_service(ns, 5.0)
-            resp = iksvc(ikreq)     #??? What format/type ?
 
-        except (rospy.ServiceException, rospy.ROSException), e:
+            if limbSide == 'left':
+                resp = self.iksvcL(self.ikreq)     #??? What format/type is the service response?
+            elif limbSide == 'right':
+                resp = self.iksvcR(self.ikreq)
+            else: 
+                rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+        except:
             rospy.logerr("IK Service call failed: %s" % (e,))
 
+        # try:
+        #     rospy.wait_for_service(ns, 5.0)
+        #     resp = iksvc(ikreq)     #??? What format/type ?
+
+        # except (rospy.ServiceException, rospy.ROSException), e:
+        #     rospy.logerr("IK Service call failed: %s" % (e,))
 
         if (resp.isValid[0]):
-                print("IK service: SUCCESS - Valid Joint Solution Found:")
-                # Format solution into Limb API-compatible dictionary
-                limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position)) #???
-                print limb_joints
-                return limb_joints
-            else:
-                print("IK service: INVALID POSE - No Valid Joint Solution Found.")
+            print("IK service: SUCCESS - Valid Joint Solution Found for limb-"+str(limbSide)+" :")
+            # Format solution into Limb API-compatible dictionary
+            limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position)) #??? joints dictionary
+            print limb_joints
+            return limb_joints
+        else:
+            print("IK service: INVALID POSE - No Valid Joint Solution Found.")
 
 
     # Method for setting cartesian position of hand
@@ -143,5 +165,5 @@ class Baxter():
     def setEndPose(self, limbSide, setPose):
         #setPose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
 
-        ik_joints = self.ik_gripper(self, limbSide, setPose)
+        ik_joints = self.getIKGripper(self, limbSide, setPose)
         self.setJoints(self,limbSide,ik_joints)
