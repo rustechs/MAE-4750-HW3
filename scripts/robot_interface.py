@@ -16,16 +16,7 @@ import baxter_interface
 
 from bax_hw3.msg import *
 
-
-
-from geometry_msgs.msg import (
-    PoseStamped,
-    Pose,
-    Point,
-    Quaternion,
-)
-
-
+from geometry_msgs.msg import PoseStamped
 
 from baxter_core_msgs.srv import (
     SolvePositionIK,
@@ -44,64 +35,25 @@ class Baxter():
     # All required calls from baxter_interface
     def __init__(self, baxter_name):
 
-        self.name = baxter_name;
+        self.name = baxter_name
+        self.enable()
         
+        #Arm Objects
         right_arm = baxter_interface.Limb('right')
         left_arm = baxter_interface.Limb('left')
 
+        #Gripper Objects
         right_gripper = baxter_interface.Gripper('right')
         left_gripper = baxter_interface.Gripper('left')
 
-        right_gripper_pose = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )    # our "Pose" message 
-        left_gripper_pose = Pose( Point(0,0,3), Quaternion(0,1,0, pi/2) )
+        # Creat Gripper Pose message
+        right_gripper_pose = Pose( Point(1,1,3), Quaternion(0,1,0, pi/2) )   #!!! is Point(1,1,3) a good starting point?
+        left_gripper_pose = Pose( Point(1,1,3), Quaternion(0,1,0, pi/2) )
 
+        #Initialize Gripper Pose
+        self.setEndPose(self, "right", right_gripper_pose)     #??? How do we avoid grippers hit each other?
+        self.setEndPose(self, "left", left_gripper_pose)
 
-    def ik_gripper(self, limbSide, setPose):
-        # self.ik_gripper(string, "Pose" msg type)
-
-        # Set up the service proxy for sending commands to robot
-        rospy.init_node("gripper_ik_service_client")
-
-        ns = "ExternalTools/" + limbSide + "/PositionKinematicsNode/IKService"
-        iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
-        ikreq = SolvePositionIKRequest()
-
-        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-        PoseStamped(header=hdr,pose=setPose,)  #??? "," after "pose=gripperPose"?
-        ikreq.pose_stamp.append(PoseStamped)
-
-
-        try:
-            rospy.wait_for_service(ns, 5.0)
-            resp = iksvc(ikreq)
-
-        except (rospy.ServiceException, rospy.ROSException), e:
-            rospy.logerr("IK Service call failed: %s" % (e,))
-            return 1   #???
-
-
-        if (resp.isValid[0]):
-                print("IK service: SUCCESS - Valid Joint Solution Found:")
-                # Format solution into Limb API-compatible dictionary
-                limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position))
-                print limb_joints
-                return limb_joints
-            else:
-                print("IK service: INVALID POSE - No Valid Joint Solution Found.")
-         
-            return 0  #???   
-
-
-
-    # Method for setting cartesian position of hand
-    # Uses some sort of external IK engine - dunno where
-    # Would be great if it could be made non-blocking for bimanual operation
-    def setEndPose(self,pose_msg):
-
-        #I will expect pose_msg to looks like {'position': (x, y, z), 'orientation': (x, y, z, w)}
-
-        self.setEndPose('left') = left_arm.
-        self.setEndPose('right') = right_arm.
 
 
     def enable(self):
@@ -138,7 +90,6 @@ class Baxter():
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
 
 
-
     # Method for setting joint positions
     # Direct call to baxter_interface
     # set_left and set_right are dict({str:float}), same size as joint angles
@@ -153,3 +104,44 @@ class Baxter():
             right_arm.move_to_joint_positions(angles,raw=False)
         else:
             rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+
+
+    def ik_gripper(self, limbSide, setPose):
+        # self.ik_gripper(string, "Pose" msg type)
+
+        rospy.init_node("gripper_ik_service_client")
+
+        ns = "ExternalTools/" + limbSide + "/PositionKinematicsNode/IKService"
+        iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
+        ikreq = SolvePositionIKRequest()
+
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        PoseStamped(header=hdr,pose=setPose,)  #??? "," after "pose=gripperPose"?
+        ikreq.pose_stamp.append(PoseStamped)
+
+        try:
+            rospy.wait_for_service(ns, 5.0)
+            resp = iksvc(ikreq)     #??? What format/type ?
+
+        except (rospy.ServiceException, rospy.ROSException), e:
+            rospy.logerr("IK Service call failed: %s" % (e,))
+
+
+        if (resp.isValid[0]):
+                print("IK service: SUCCESS - Valid Joint Solution Found:")
+                # Format solution into Limb API-compatible dictionary
+                limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position)) #???
+                print limb_joints
+                return limb_joints
+            else:
+                print("IK service: INVALID POSE - No Valid Joint Solution Found.")
+
+
+    # Method for setting cartesian position of hand
+    # Uses some sort of external IK engine - dunno where
+    # Would be great if it could be made non-blocking for bimanual operation
+    def setEndPose(self, limbSide, setPose):
+        #setPose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
+
+        ik_joints = self.ik_gripper(self, limbSide, setPose)
+        self.setJoints(self,limbSide,ik_joints)
