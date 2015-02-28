@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <package>
   <name>bax_hw3</name>
-  <version>0.0.0</version>
+  <version>0.1.0</version>
   <description>Robot Manipulation HW3 submission for Anthony McNicoll (am859), Alexander Volkov (av333), and Zhuo Li (zl347). Connects to a Baxter machine and performs stacking with either one or two arms.</description>
 
   <maintainer email="am859@cornell.edu">Anthony McNicoll</maintainer>
   <maintainer email="av333@cornell.edu">Alexander Volkov</maintainer>
-  <maintainer email="zl347)@cornell.edu">Zhuo Li</maintainer>
+  <maintainer email="zl347@cornell.edu">Zhuo Li</maintainer>
 
   <license>WTFPL</license>
 
