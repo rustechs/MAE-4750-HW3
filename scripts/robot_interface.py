@@ -16,7 +16,7 @@ import tf2_ros
 
 from bax_hw3.msg import *
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
 from std_msgs.msg import Header
 from baxter_core_msgs.srv import (
     SolvePositionIK,
@@ -49,22 +49,10 @@ class Baxter():
         self.right_gripper = baxter_interface.Gripper('right')
         self.left_gripper = baxter_interface.Gripper('left')
 
-        ############ DOES THIS ACTUALLY WORK ??? ############
-
-        self.nsL = "ExternalTools/left/PositionKinematicsNode/IKService"
-        self.nsR = "ExternalTools/right/PositionKinematicsNode/IKService"
-        self.iksvcL = rospy.ServiceProxy(self.nsL, SolvePositionIK)
-        self.iksvcR = rospy.ServiceProxy(self.nsR, SolvePositionIK)
-
-         # Wait for services to exist
-        rospy.wait_for_service(self.nsL)         
-        rospy.wait_for_service(self.nsR) 
-
         # Set up publishing to the face
-        self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True)
+        self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
 
-        ######## tf trnaform ########
-        #rospy.init_node('baxter_tf_broadcaster')
+        ######## tf trnaform #######
         self.br = tf2_ros.TransformBroadcaster()   #creat tf broadcaster object
 
         #rospy.init_node('tf_baxter')
@@ -75,31 +63,24 @@ class Baxter():
         #####################################################
 
     # Tansformation from a local frame Pose to global frame
-    def tfBaxter(self,localPose):
     # World frame is "base" for baxter
-        rate = rospy.Rate(10.0)
-        while not rospy.is_shutdown():
-            self.br.sendTransform(self.zeroPose.position,
-                                self.zeroPose.orientation, #Zero point relative to "base"
-                                rospy.Time.now(),
-                                "basePose",   # Transfer to base frame
-                                localPose)   # Transfer from
-
-        try:
-                (trans,rot) = self.buf.lookupTransform('/'+localPose, '/basePose')
-                return trans
-
-            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-                continue
+    def tfBaxter(self,localPose):
+        self.br.sendTransform(self.zeroPose.position,
+                            self.zeroPose.orientation, #Zero point relative to "base"
+                            rospy.Time.now(),
+                            "basePose",   # Transfer to base frame
+                            localPose)   # Transfer from
+        (trans,rot) = self.buf.lookupTransform('/'+localPose, '/basePose')
+        return trans
 
     #The pose at calibration 0 point of our local working frame
     def zero(self):
-        self.zeroPose = self.getEndPose('right')
+        self.zeroPose = self.getEndPose('left')
 
     def face(self, fname):
         img = cv2.imread(fname + '.png')
-        msg = cb_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
-        self.facepub.publish(msg)
+        #msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
+        #self.facepub.publish(msg)
 
     # Enable the robot
     # Must be manually called after instantiation 
@@ -250,20 +231,20 @@ class Baxter():
 
 
     # Method for getting end-effector position
-    # Uses forward kinematics ROS library, TF
     # Angular pose will always be top-down, so wrist-gripper displacement doesn't have to be factored in
     def getEndPose(self,limbSide):
         # left_arm.endpoint_pose(): pose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
         try:
             if limbSide == 'left':
-                return self.left_arm.endpoint_pose() 
+                out = self.left_arm.endpoint_pose() 
             elif limbSide == 'right':
-                return self.right_arm.endpoint_pose()
+                out = self.right_arm.endpoint_pose()
             else: 
                 raise
         except:
             rospy.logwarn('Invalid limb side name #: ' + limbSide)
             raise
+        return Pose(Point(*out['position']), Quaternion(*out['orientation']))
 
 
     # Method for setting joint positions
@@ -273,45 +254,31 @@ class Baxter():
         # move_to_joint_positions(self, positions, False)
         # positions (dict({str:float})) - joint_name:angle command
 
-        try:
-            if limbSide == 'left':
-                self.left_arm.move_to_joint_positions(angles)
-            elif limbSide == 'right':
-                self.right_arm.move_to_joint_positions(angles)
-            else:
-                raise
-        except:
-            rospy.logwarn('Invalid limb side name #: ' + limbSide)
-            raise
-
+        if limbSide == 'left':
+            self.left_arm.move_to_joint_positions(angles)
+        elif limbSide == 'right':
+            self.right_arm.move_to_joint_positions(angles)
+        else:
+            rospy.logwarn('Incorrect limb string: %s' % limbSide)
 
     # Method for calculating joint angles given a desired end-effector pose
     def getIKGripper(self, limbSide, setPose):
 
-        hdr = Header(stamp=rospy.Time.now(), frame_id='base')    #??? 'what's their base frame???
+        # Prepare the request
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
         ps = PoseStamped(header=hdr, pose=setPose,)
-        ikreq = SolvePositionIKRequest(ps, [], 0)
+        ikreq = SolvePositionIKRequest([ps], [], 0)
 
-        try:
-
-            if limbSide == 'left':
-                resp = self.iksvcL(ikreq)     #??? What format/type is the service response?
-            elif limbSide == 'right':
-                resp = self.iksvcR(ikreq)
-            else: 
-                rospy.logwarn('Invalid limb side name #: ' + limbSide)
-                raise
-        except:
-            rospy.logerr("IK Service call failed: %s" % sys.exc_info()[0])
-            import pdb; pdb.set_trace()
-            raise
+        # Make the service call
+        srvName = 'ExternalTools/' + limbSide + '/PositionKinematicsNode/IKService'
+        srvAlias = rospy.ServiceProxy(srvName, SolvePositionIK)
+        rospy.wait_for_service(srvName)
+        resp = srvAlias(ikreq)
 
         if (resp.isValid[0]):
-            print("IK service: SUCCESS - Valid Joint Solution Found for limb-"+str(limbSide)+" :")
+            print 'IK service: SUCCESS - Valid Joint Solution Found'
             # Format solution into Limb API-compatible dictionary
-            limb_joints = dict(zip(resp.joints[0].name, resp.joints[0].position)) #??? joints dictionary
-            print limb_joints
-            return limb_joints
+            return dict(zip(resp.joints[0].name, resp.joints[0].position)) #??? joints dictionary
         else:
             print("IK service: INVALID POSE - No Valid Joint Solution Found.")
 
@@ -323,4 +290,4 @@ class Baxter():
         #setPose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
 
         ik_joints = self.getIKGripper(limbSide, setPose)
-        self.setJoints(self,limbSide,ik_joints)
+        self.setJoints(limbSide,ik_joints)

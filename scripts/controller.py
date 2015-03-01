@@ -86,7 +86,7 @@ class Controller():
         # To signal unimanual operation, just set the right limb always busy.
         self.hasStack = 'left'
         self.busy = {'left': False, 'right': False}
-        self.busy['right'] = self.bimanual
+        self.busy['right'] = not self.bimanual
 
         # Initialize "done" indicator
         self.done = False
@@ -103,7 +103,7 @@ class Controller():
         self.handleCommand( Command(initstr) )
 
         # This node subscribes to the "command" topic.
-        rospy.Subscriber("command", Command, self.handleCommand)
+        rospy.Subscriber("commandme", Command, self.handleCommand)
         print 'Subscriptions successful.'
 
         # Initializes the node (connects to roscore)
@@ -215,7 +215,10 @@ class Controller():
 
         # If the stack order matches the objective, express victory
         order = [slot.contains.n for slot in self.stack]
-        import pdb; pdb.set_trace()
+        #debu
+        rp = self.baxter.getEndPose('right')
+        self.baxter.setEndPose('right', rp)
+        #import pdb; pdb.set_trace()
         if order == self.objective:
             rospy.loginfo('Objective achieved.')
             self.baxter.face('happy')
@@ -224,7 +227,7 @@ class Controller():
 
         # If it is not done, travel up the stack looking for the first stack
         # slot that either contains the wrong block or is empty.
-        for i, slot in self.stack:
+        for i, slot in enumerate(self.stack):
 
             rightBlock = self.blocks[self.objective[i]]
 
@@ -241,11 +244,6 @@ class Controller():
                 return
 
         rospy.loginfo('Planning could not find something to do ...?')
-
-    # 'neutral' 'happy' 'sad' 'confused'
-    def face(self, emotion):
-        pass # Implement in robot_interface later
-
 
 # This is what runs when the script is executed externally.
 # It runs the main node function, and catches exceptions.
