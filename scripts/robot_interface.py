@@ -31,8 +31,10 @@ from baxter_core_msgs.srv import (
 class Baxter():
 
     # Baxter class constructor
-    def __init__(self, baxter_name):
+    def __init__(self, baxter_name="Baxter"):
 
+        rospy.init_node("Baxter_Node")
+        
         # Give him a creative name
         self.name = baxter_name
 
@@ -42,12 +44,13 @@ class Baxter():
         self.right_arm = baxter_interface.Limb('right')
         self.left_arm = baxter_interface.Limb('left')
 
+        self.BaxEnable = baxter_interface.RobotEnable()
+
         # Create baxter gripper instances
         self.right_gripper = baxter_interface.Gripper('right')
         self.left_gripper = baxter_interface.Gripper('left')
 
         ############ DOES THIS ACTUALLY WORK ??? ############
-        rospy.init_node("ik_service_client")
 
         self.nsL = "ExternalTools/left/PositionKinematicsNode/IKService"
         self.nsR = "ExternalTools/right/PositionKinematicsNode/IKService"
@@ -64,20 +67,20 @@ class Baxter():
     # Enable the robot
     # Must be manually called after instantiation 
     def enable(self):
-        baxter_interface.RobotEnable.enable()
+        self.BaxEnable.enable()
 
     # Disable the robot
     def disable(self):
-        baxter_interface.RobotEnable.disable()
+        self.BaxEnable.RobotEnable.disable()
 
     # Check if robot is enabled
-    def isEnabled(self)
-        return baxter_interface.RobotEnable._state.enabled
+    def isEnabled(self):
+        return self.BaxEnable._state.enabled
         
     # Stop the robot
     # Equivalent to hitting e-stop
     def stop(self):
-        baxter_interface.RobotEnable.stop()
+        self.BaxEnable.stop()
 
     # Close specified gripper
     # Defaults to blocking
@@ -197,7 +200,7 @@ class Baxter():
     def getJoints(self, limbSide):
         # Returns: dict({str:float})
         # unordered dict of joint name Keys to angle (rad) Values
-        try
+        try:
             if limbSide == 'left':
                 return self.left_arm.joint_angles()
             elif limbSide == 'right':
@@ -262,9 +265,10 @@ class Baxter():
                 resp = self.iksvcR(self.ikreq)
             else: 
                 rospy.logwarn('Invalid limb side name #: ' + limbSide)
+                raise
         except:
             rospy.logerr("IK Service call failed: %s" % (e,))
-
+            raise
         # try:
         #     rospy.wait_for_service(ns, 5.0)
         #     resp = iksvc(ikreq)     #??? What format/type ?
