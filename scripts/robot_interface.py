@@ -56,17 +56,17 @@ class Baxter():
 
         self.ikreq = SolvePositionIKRequest()
 
-        self.zero()
-        
 
     def enable(self):
         baxter_interface.RobotEnable() #??? This is the API responsible for enabling/disabling the robot, as well as running version verification
 
 
-    #Set up the All parameters for Right Gripper Pose to 0
-    def zero(self):
-        #Initialize Gripper Pose
-        self.setEndPose(self, "right", Pose( Point(0,0,0), Quaternion(0,0,0,0))
+    # #Set up the All parameters for Right Gripper Pose to 0
+    # def zero(self):
+    #     initialFrame = self.getEndPose("right")
+
+    #     # #Initialize Gripper Pose
+    #     # self.setEndPose(self, "right", Pose( Point(0,0,0), Quaternion(0,0,0,0)) #???
 
 
     # Method for getting joint configuration
