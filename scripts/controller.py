@@ -10,7 +10,7 @@
     moves and coordinate limb motion.
 '''
 
-import rospy, copy
+import rospy, copy, threading
 from bax_hw3.msg import *
 from bax_hw3.srv import *
 from geometry_msgs.msg import Point, Quaternion, Pose
@@ -21,6 +21,7 @@ class Block():
     def __init__(self, number, x = 0, y = 0, z = 0):
         self.pos = Point(x, y, z)
         self.n = number
+        self.inSlot = None
 
 # A class representing an allowed "slot" for a block in the workspace.
 class Slot():
@@ -30,11 +31,14 @@ class Slot():
 
     # Change a Block's coordinates to match this slot's
     def eat(self, block):
+        block.inSlot.vomit()
         block.pos = self.pos
+        block.inSlot = self
         self.contains = block
 
     # "Lets go" of a block
     def vomit(self):
+        self.contains.inSlot = None
         self.contains = None
 
     def isEmpty(self):
@@ -47,8 +51,8 @@ class Controller():
     def __init__(self):
 
         # Load number of blocks, configuration, bimanual setting
-        h = .044
-        d = .08
+        self.h = .044
+        self.d = .08
         self.nBlocks = rospy.get_param('num_blocks')
         initstr = rospy.get_param('configuration')
         self.bimanual = (1 == rospy.get_param('bimanual'))
@@ -58,7 +62,7 @@ class Controller():
 
         # Initialize the stack list.
         # It is a list of slots in the stack, from bottom to top.
-        y = [.044*i for i in range(self.nBlocks)]
+        y = [self.h*i for i in range(self.nBlocks)]
         self.stack = [Slot(0, 0, y[i]) for i in range(self.nBlocks)]
 
         # Place the blocks in the stack according to initial condition.
@@ -68,22 +72,22 @@ class Controller():
         for i, slot in enumerate(self.stack):
             slot.eat(orderedBlocks[i])
 
-        # Initialize valid table slots
-        #   If unimanual, add slots extending left of the stack.
-        #   If bimanual, add slots to left for even indices, right for odd
-        if self.bimanual:
-            self.slots = []
-            for i in range(self.nBlocks):
-                s = -1 + 2*(i%2)
-                m = 1 + i/2
-                self.slots.append(Slot(s*d*m, 0, 0))
-        else:
-            self.slots = [Slot(-(i+1)*d, 0, 0) for i in range(self.nBlocks)]
+        # Initialize valid table slots - nBlocks slots on either side.
+        # Organize in a dictionary.
+        self.slots['left'] = []
+        self.slots['right'] = []
+        for i in range(self.nBlocks):
+            self.slots['left'].append(Slot(-self.d*(i+1), 0, 0))
+            self.slots['right'].append(Slot(self.d*(i+1), 0, 0))
 
         # Initialize a collision prevention variable called "hasStack", which
         # at all times should be maintained with either 'left', 'right', or
         # None values to indicate who has control of the stack.
+        # Also initialize a "busy" dictionary of booleans.
+        # To signal unimanual operation, just set the right limb always busy.
         self.hasStack = 'left'
+        self.busy = {'left': False, 'right': False}
+        self.busy['right'] = self.bimanual
 
         # Initialize "done" indicator
         self.done = False
@@ -91,6 +95,7 @@ class Controller():
         # TODO initialize the Baxter object and home it.
         # Note that Baxter should be initialized with his left gripper
         # grasping the top-most block of the initial stack.
+        self.baxter = robot_interface.Baxter()
 
         # Initialize the objective by sending a message to self
         self.handleCommand( Command(initstr) )
@@ -116,8 +121,90 @@ class Controller():
         # TODO set Baxter face
         rospy.loginfo('Objective has changed to ' + initstr)
 
+    # This method tracks a limb's motion and is meant to run in a seperate
+    # thread. It toggles flags in the Controller object.
+    def pickPlaceThread(self, side, pick, place):
+
+        # Set up collision/busy flags
+        self.busy[side] = True
+
+        # Make the intermediate points
+        pickReady = copy.deepcopy(pick)
+        pickReady.z += self.h
+        placeReady = copy.deepcopy(place)
+        placeReady.z += self.h
+
+        # Do the procedure
+        self.baxter.open(side)
+        self.move(side, pickReady)
+        self.move(side, pick)
+        self.baxter.close( side )
+        self.move(side, pickReady)
+        self.move(side, placeReady)
+        self.move(side, place)
+        self.baxter.open( side )
+        self.move(side, placeReady)
+
+        # Mark the limb as available and return
+        self.busy[side] = False
+
+    # Convenience function for a simple move.
+    # Collision avoidance is implemented here. If the destination is the stack
+    # and this side does not current have stack, wait until hasStack is set
+    # back to None. If the destination is not stack, just do it.
+    def move(self, side, point):
+
+        # A non-rotated quaternion for the Pose message.
+        noRot = Quaternion(1, 0, 0, 0)
+
+        # The destination is stack.
+        if (point.x == 0) and (point.y == 0):
+
+            # Wait until we have permission, then take it and move.
+            while not ( (self.hasStack == side) or (self.hasStack is None) ):
+                pass
+            self.hasStack = side
+            self.baxter.setEndPose( side, Pose(point, noRot) )
+
+        # The destination is not stack.
+        # If we had stack before, give it back.
+        else:
+            if self.hasStack == side:
+                self.hasStack = None
+            self.baxter.setEndPose( side, Pose(point, noRot) )
+
+    # Coordinates pick-place action done by Baxter and updates model
+    # accordingly. This function call is non-blocking (the limb used may
+    # continue to move after function has returned) but does wait for a limb.
+    def pickPlace(self, block, slot):
+
+        # Find or wait for an available limb
+        while True:
+            if not self.busy['left']:
+                side = 'left'
+                break
+            if not self.busy['right']:
+                side = 'right'
+                break
+
+        # If slot is an actual slot, get its point. If it was 'table', find
+        # a slot on the table for that side.
+        if slot == 'table':
+            occ = [s.isEmpty() for s in self.slots[side]]
+            slot = self.slots[side][occ.index(True)]
+
+        # Queue up the move procedure in a seperate thread and return.
+        thread = threading.Thread(target=self.pickPlaceThread,
+                 args = ( copy.copy(block.pos), slot.pos))
+        thread.start
+
+        # Update the model before returning so that the planner has
+        # accurate information and doesn't do same thing twice.
+        slot.eat(block)
+
+
     # Function that takes action depending on the state of the workspace.
-    # All the secret sauce is in here.
+    # Coordination of arms happens external to this; high-level only.
     def planMove(self):
 
         # Start planning out move right away.
