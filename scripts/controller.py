@@ -52,7 +52,7 @@ class Controller():
         # Load number of blocks, configuration, bimanual setting
         rospy.loginfo('Getting parameters from ROS')
         self.h = .044
-        self.d = .08
+        self.d = .1
         self.nBlocks = rospy.get_param('num_blocks')
         initstr = rospy.get_param('configuration')
         self.bimanual = (1 == rospy.get_param('bimanual'))
@@ -77,8 +77,8 @@ class Controller():
         # Organize in a dictionary.
         self.slots = {'left': [], 'right': []}
         for i in range(self.nBlocks):
-            self.slots['left'].append(Slot(-self.d*(i+1), 0, 0))
-            self.slots['right'].append(Slot(self.d*(i+1), 0, 0))
+            self.slots['left'].append(Slot(0, self.d*(i+1), 0))
+            self.slots['right'].append(Slot(0, -self.d*(i+1), 0))
 
         # Initialize a collision prevention variable called "hasStack", which
         # at all times should be maintained with either 'left', 'right', or
@@ -100,6 +100,11 @@ class Controller():
         self.baxter = robot_interface.Baxter()
         self.baxter.enable()
         rospy.loginfo('Connecting to Baxter successful.')
+
+        # Call the bottom of the stack the origin
+        self.baxter.zero()
+        self.baxter.zero(Pose(Point(0,0,-self.nBlocks*self.h),
+                              Quaternion(1,0,0,0) ))
 
         # Initialize the objective by sending a message to self
         self.handleCommand( Command(initstr) )
@@ -128,30 +133,31 @@ class Controller():
     # thread. It toggles flags in the Controller object.
     def pickPlaceThread(self, side, pick, place):
 
-        rospy.loginfo('Initiate pick from %s to %s with %s' % pick, place, side)
+        import pdb; pdb.set_trace()
+        rospy.loginfo('Initiate pick with %s from\n%s\nto\n%s' % (side, pick, place))
         # Set up collision/busy flags
         self.busy[side] = True
 
         # Make the intermediate points
         pickReady = copy.deepcopy(pick)
-        pickReady.z += self.h
+        pickReady.z += self.d
         placeReady = copy.deepcopy(place)
-        placeReady.z += self.h
+        placeReady.z += self.d
 
         # Do the procedure
-        self.baxter.open(side)
+        self.baxter.openGrip(side)
         self.move(side, pickReady)
         self.move(side, pick)
-        self.baxter.close( side )
+        self.baxter.closeGrip( side )
         self.move(side, pickReady)
         self.move(side, placeReady)
         self.move(side, place)
-        self.baxter.open( side )
+        self.baxter.openGrip( side )
         self.move(side, placeReady)
 
         # Mark the limb as available and return
         self.busy[side] = False
-        rospy.loginfo('Pick from %s to %s with %s complete.' % pick, place, side)
+        rospy.loginfo('Pick with %s complete.' % side)
 
     # Convenience function for a simple move.
     # Collision avoidance is implemented here. If the destination is the stack
@@ -202,8 +208,8 @@ class Controller():
 
         # Queue up the move procedure in a seperate thread and return.
         thread = threading.Thread(target=self.pickPlaceThread,
-                 args = ( copy.copy(block.pos), slot.pos))
-        thread.start
+                 args = ( side, block.pos, slot.pos))
+        thread.start()
 
         # Update the model before returning so that the planner has
         # accurate information and doesn't do same thing twice.
@@ -233,6 +239,7 @@ class Controller():
 
             # If the slot is empty, place the block that belongs there.
             if slot.isEmpty():
+                import pdb; pdb.set_trace()
                 self.pickPlace(rightBlock, slot)
                 return
 
@@ -244,6 +251,7 @@ class Controller():
                 except:
                     indn = len(nums) - 1
                 removeBlock = self.blocks[indn]
+                import pdb; pdb.set_trace()
                 self.pickPlace(removeBlock, 'table')
                 return
 
