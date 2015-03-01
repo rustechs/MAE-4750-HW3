@@ -52,27 +52,26 @@ class Baxter():
         # Set up publishing to the face
         self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
 
-        ######## tf trnaform #######
-        self.br = tf2_ros.TransformBroadcaster()   #creat tf broadcaster object
+        ### tf trnaform ###
+        #rospy.init_node('baxter_tf_broadcaster')
+        self.br = tf.TransformBroadcaster()   #creat tf broadcaster object
 
         #rospy.init_node('tf_baxter')
-        self.buf = tf2_ros.Buffer();
-        tf2_ros.TransformListener(self.buf)    #creat tf listener object
-
+        self.listener = tf.TransformListener()    #creat tf listener object
 
         #####################################################
 
     # Tansformation from a local frame Pose to global frame
-    # World frame is "base" for baxter
     def tfBaxter(self,localPose):
+    # World frame is "base" for baxter
         self.br.sendTransform(self.zeroPose.position,
                             self.zeroPose.orientation, #Zero point relative to "base"
                             rospy.Time.now(),
                             "basePose",   # Transfer to base frame
                             localPose)   # Transfer from
-        (trans,rot) = self.buf.lookupTransform('/'+localPose, '/basePose')
+        (trans,rot) = self.listener.lookupTransform('/'+localPose, '/basePose', rospy.Time(0))
         return trans
-
+            
     #The pose at calibration 0 point of our local working frame
     def zero(self):
         self.zeroPose = self.getEndPose('left')
@@ -244,7 +243,7 @@ class Baxter():
         except:
             rospy.logwarn('Invalid limb side name #: ' + limbSide)
             raise
-        return Pose(Point(*out['position']), Quaternion(*out['orientation']))
+        return Pose(Point(*out['position']), Quaternion(*out['orientation'])) 
 
 
     # Method for setting joint positions
@@ -260,6 +259,7 @@ class Baxter():
             self.right_arm.move_to_joint_positions(angles)
         else:
             rospy.logwarn('Incorrect limb string: %s' % limbSide)
+
 
     # Method for calculating joint angles given a desired end-effector pose
     def getIKGripper(self, limbSide, setPose):
