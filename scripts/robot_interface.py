@@ -8,8 +8,8 @@
     *Pick-and-place routine that accepts source and destination coordinates
 '''
 
-import argparse  #IK service?
-import sys       #IK serivce?
+import argparse 
+import sys       
 
 import rospy
 import baxter_interface
@@ -25,53 +25,176 @@ from baxter_core_msgs.srv import (
 
 
 
-# The baxter class.
+# The baxter class definition
+# Acts as a wrapper for many useful baxter_interface methods
+# Also spawns a node to interface with IK Service
 class Baxter():
 
-    # Method for on-lining baxter
-    # All required calls from baxter_interface
+    # Baxter class constructor
     def __init__(self, baxter_name):
 
+        # Give him a creative name
         self.name = baxter_name
-        self.enable()
+
+        # self.enable() # Probably should be called manually
         
-        #Arm Objects
+        # Create baxter arm instances
         self.right_arm = baxter_interface.Limb('right')
         self.left_arm = baxter_interface.Limb('left')
 
-        #Gripper Objects
+        # Create baxter gripper instances
         self.right_gripper = baxter_interface.Gripper('right')
         self.left_gripper = baxter_interface.Gripper('left')
 
-
-        rospy.init_node("gripper_ik_service_client")
+        ############ DOES THIS ACTUALLY WORK ??? ############
+        rospy.init_node("ik_service_client")
 
         self.nsL = "ExternalTools/left/PositionKinematicsNode/IKService"
         self.nsR = "ExternalTools/right/PositionKinematicsNode/IKService"
         self.iksvcL = rospy.ServiceProxy(self.nsL, SolvePositionIK)
         self.iksvcR = rospy.ServiceProxy(self.nsR, SolvePositionIK)
 
-        rospy.wait_for_service(self.nsL)  #Wait for services to be exist
-        rospy.wait_for_service(self.nsR)
+         # Wait for services to exist
+        rospy.wait_for_service(self.nsL)         
+        rospy.wait_for_service(self.nsR) 
 
         self.ikreq = SolvePositionIKRequest()
+        #####################################################
 
-
+    # Enable the robot
+    # Must be manually called after instantiation 
     def enable(self):
-        baxter_interface.RobotEnable() #??? This is the API responsible for enabling/disabling the robot, as well as running version verification
+        baxter_interface.RobotEnable.enable()
 
+    # Disable the robot
+    def disable(self):
+        baxter_interface.RobotEnable.disable()
 
-    # #Set up the All parameters for Right Gripper Pose to 0
-    # def zero(self):
-    #     initialFrame = self.getEndPose("right")
+    # Check if robot is enabled
+    def isEnabled(self)
+        return baxter_interface.RobotEnable._state.enabled
+        
+    # Stop the robot
+    # Equivalent to hitting e-stop
+    def stop(self):
+        baxter_interface.RobotEnable.stop()
 
-    #     # #Initialize Gripper Pose
-    #     # self.setEndPose(self, "right", Pose( Point(0,0,0), Quaternion(0,0,0,0)) #???
+    # Close specified gripper
+    # Defaults to blocking
+    def closeGrip(self, limbSide, block=True):
+        try:
+            if limbSide == 'left':
+                self.left_gripper.close(block)
+            elif limbSide == 'right':
+                self.right_gripper.close(block)
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
 
+    # Open specified gripper
+    # Defaults to blocking
+    def openGrip(self, limbSide, block=True):
+        try:
+            if limbSide == 'left':
+                self.left_gripper.open(block)
+            elif limbSide == 'right':
+                self.right_gripper.open(block)
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
 
+    # Set specified gripper's applied force
+    # Specify force in % (0-100), mapping to 0-30 N
+    def setGripForce(self, limbSide, force):
+        try:
+            if limbSide == 'left':
+                self.left_gripper.set_moving_force(force)
+                self.left_gripper.set_holding_force(force)
+            elif limbSide == 'right':
+                self.right_gripper.set_moving_force(force)
+                self.right_gripper.set_holding_force(force)
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
+
+    # Check if specified gripper is ready
+    # Returns true iff gripper is calibrated, not in error state, and not moving
+    def getGripReady(self, limbSide):
+        try:
+            if limbSide == 'left':
+                return self.left_gripper.ready()
+            elif limbSide == 'right':
+                return self.right_gripper.ready()
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
+
+    # Check if specified gripper is gripping (i.e. force threshold reached)
+    def getGripGripping(self, limbSide):
+        try:
+            if limbSide == 'left':
+                return self.left_gripper.gripping()
+            elif limbSide == 'right':
+                return self.right_gripper.gripping()
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
+
+    # Check if specified gripper missed object
+    # (i.e. gripper closed without reaching force threshold)
+    def getGripMissed(self, limbSide):
+        try:
+            if limbSide == 'left':
+                return self.left_gripper.missed()
+            elif limbSide == 'right':
+                return self.right_gripper.missed()
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
+    
+    # Get specified gripper's current position
+    # Returns as percent (0-100) of full travel range
+    def getGripPos(self, limbSide):
+        try:
+            if limbSide == 'left':
+                return self.left_gripper.position()
+            elif limbSide == 'right':
+                return self.right_gripper.position()
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
+
+    # Get specified gripper's current applied force
+    # Returns as percent (0-100) of max applicable force
+    def getGripForce(self, limbSide):
+        try:
+            if limbSide == 'left':
+                return self.left_gripper.force()
+            elif limbSide == 'right':
+                return self.right_gripper.force()
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid limb side argument: ' + limbSide)
+            raise
+    
     # Method for getting joint configuration
     # Direct call to baxter_interface
-    def getJoints(self,limbSide):
+    def getJoints(self, limbSide):
         # Returns: dict({str:float})
         # unordered dict of joint name Keys to angle (rad) Values
         try
@@ -82,7 +205,7 @@ class Baxter():
             else:
                 raise
         except:
-            rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+            rospy.logwarn('Invalid limb side name ' + limbSide)
             raise
 
 
