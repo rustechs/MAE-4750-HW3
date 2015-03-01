@@ -222,7 +222,7 @@ class Baxter():
             else: 
                 raise
         except:
-            rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+            rospy.logwarn('Invalid limb side name #: ' + limbSide)
             raise
 
 
@@ -230,19 +230,19 @@ class Baxter():
     # Direct call to baxter_interface
     # set_left and set_right are dict({str:float}), same size as joint angles
     def setJoints(self,limbSide,angles):
-        # set_joint_positions(self, positions, raw=False)
+        # set_joint_positions(self, positions, False)
         # positions (dict({str:float})) - joint_name:angle command
         # raw (bool) - advanced, direct position control mode
 
         try:
             if limbSide == 'left':
-                self.left_arm.move_to_joint_positions(angles,raw=False)
+                self.left_arm.move_to_joint_positions(angles,False)
             elif limbSide == 'right':
-                self.right_arm.move_to_joint_positions(angles,raw=False)
+                self.right_arm.move_to_joint_positions(angles,False)
             else:
                 raise
         except:
-            rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+            rospy.logwarn('Invalid limb side name #: ' + limbSide)
             raise
 
 
@@ -261,7 +261,7 @@ class Baxter():
             elif limbSide == 'right':
                 resp = self.iksvcR(self.ikreq)
             else: 
-                rospy.logwarn('Invalid limb side name #: ' + str(limbSide))
+                rospy.logwarn('Invalid limb side name #: ' + limbSide)
         except:
             rospy.logerr("IK Service call failed: %s" % (e,))
 
