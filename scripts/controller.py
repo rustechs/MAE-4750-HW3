@@ -37,6 +37,9 @@ class Slot():
     def vomit(self):
         self.contains = None
 
+    def isEmpty(self):
+        return self.contains is None
+
 # The controller class.
 class Controller():
 
@@ -50,15 +53,20 @@ class Controller():
         initstr = rospy.get_param('configuration')
         self.bimanual = (1 == rospy.get_param('bimanual'))
 
-        # Initialize the block set and stack list together.
-        # The stack list is a list of (occupied) slots.
-        y = [.044*i for i in range(self.nBlocks)]
-        if initstr == 'stacked_descending':
-            y.reverse()
+        # Initialize the block set, in numerical order.
         self.blocks = [Block(i) for i in range(self.nBlocks)]
+
+        # Initialize the stack list.
+        # It is a list of slots in the stack, from bottom to top.
+        y = [.044*i for i in range(self.nBlocks)]
         self.stack = [Slot(0, 0, y[i]) for i in range(self.nBlocks)]
+
+        # Place the blocks in the stack according to initial condition.
+        orderedBlocks = copy.copy(self.blocks)
+        if initstr == 'stacked_descending':
+            orderedBlocks.reverse()
         for i, slot in enumerate(self.stack):
-            slot.eat(self.blocks[i])
+            slot.eat(orderedBlocks[i])
 
         # Initialize valid table slots
         #   If unimanual, add slots extending left of the stack.
@@ -77,7 +85,12 @@ class Controller():
         # None values to indicate who has control of the stack.
         self.hasStack = 'left'
 
+        # Initialize "done" indicator
+        self.done = False
+
         # TODO initialize the Baxter object and home it.
+        # Note that Baxter should be initialized with his left gripper
+        # grasping the top-most block of the initial stack.
 
         # Initialize the objective by sending a message to self
         self.handleCommand( Command(initstr) )
@@ -99,50 +112,57 @@ class Controller():
         self.objective = range(self.nBlocks)
         if initstr == 'stacked_descending':
             self.objective.reverse()
+        self.done = False
+        # TODO set Baxter face
         rospy.loginfo('Objective has changed to ' + initstr)
 
     # Function that takes action depending on the state of the workspace.
     # All the secret sauce is in here.
     def planMove(self):
 
-        # Work with a fresh state.
-        # State vector: state[n] returns the block that block n+1 is on.
-        state = self.stateWaiter.fresh()
+        # Start planning out move right away.
 
-        # If the state matches the objective, express victory
-        if list(state.is_on) == self.objective:
-            rospy.loginfo('Objective currently met.')
+        # If the stack order matches the objective, express victory
+        order = [slot.contains.n for slot in self.stack]
+        if order == self.objective:
+            rospy.loginfo('Objective achieved.')
+            # TODO set Baxter face
+            self.done = True
             return
-        stateArr = state.is_on
 
-        # Otherwise, start working.
+        # If it is not done, travel up the stack looking for the first stack
+        # slot that either contains the wrong block or is empty.
+        for i, slot in self.stack:
 
-        # Start by climbing up the stack until either a bad block or no block
-        # is found. If there's a bad block, take off the block on top of it.
-        bad = False
-        thisBlock = self.isBelow(0, self.objective)
-        while not bad:
-            thisOK = self.isInPosition(thisBlock, stateArr)
-            if thisOK:
-                thisBlock = self.isBelow(thisBlock, self.objective)
-            else:
-                targBlock = thisBlock
-                targOn = self.isAbove(thisBlock, self.objective)
-                bad = True
+            rightBlock = self.blocks[self.objective[i]]
 
-        self.moveRobot('open',0)
-        self.moveRobot('move_to', targBlock)
-        self.moveRobot('close',0)
-        self.moveRobot('move_over', targOn)
-        self.moveRobot('open',0)
+            # If the slot is empty, place the block that belongs there.
+            if slot.isEmpty():
+                self.pickPlace(rightBlock, slot)
+                return
+
+            # If the slot contains the wrong block, take the top of the stack # off and place it on an available table slot.
+            if not (slot.contains is rightBlock):
+                nums = [self.stack[i].contains for i in range(self.nBlocks)]
+                removeBlock = self.blocks[nums.index(None) - 1]
+                self.pickPlace(removeBlock, 'table')
+                return
+
+        rospy.loginfo('Planning could not find something to do ...?')
+
+    # 'neutral' 'happy' 'sad' 'confused'
+    def face(self, emotion):
+        pass # Implement in robot_interface later
+
 
 # This is what runs when the script is executed externally.
 # It runs the main node function, and catches exceptions.
 if __name__ == '__main__':
     try:
-        cObject = Controller()
+        controller = Controller()
         while True:
-            cObject.planMove();
+            if not controller.done:
+                controller.planMove();
     except:
         import pdb, traceback, sys
         type, value, tb = sys.exc_info()
