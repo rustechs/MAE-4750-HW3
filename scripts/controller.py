@@ -12,7 +12,6 @@
 
 import rospy, copy, threading
 from bax_hw3.msg import *
-from bax_hw3.srv import *
 from geometry_msgs.msg import Point, Quaternion, Pose
 from waiter import Waiter
 

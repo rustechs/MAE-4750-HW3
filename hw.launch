@@ -13,7 +13,7 @@ Note that although this launch file launches multiple nodes, it only executes th
 -->
 
 <launch>
-  <node name="$(control)" pkg="bax_hw3" type="controller.py" output="screen"/>
+  <node name="$(anon control)" pkg="bax_hw3" type="controller.py" output="screen"/>
   <param name="num_blocks" value="6" type="int" />
   <param name="configuration" value="stacked_descending" type="str" />
   <param name="bimanual" value="0" type="int" />
