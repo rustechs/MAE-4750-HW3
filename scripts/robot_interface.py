@@ -61,7 +61,38 @@ class Baxter():
          # Wait for services to exist
         rospy.wait_for_service(self.nsL)         
         rospy.wait_for_service(self.nsR) 
+        
+
+        ######## tf trnaform ########
+        #rospy.init_node('baxter_tf_broadcaster')
+        self.br = tf.TransformBroadcaster()   #creat tf broadcaster object
+
+        #rospy.init_node('tf_baxter')
+        self.listener = tf.TransformListener()    #creat tf listener object
+
         #####################################################
+
+    # Tansformation from a local frame Pose to global frame
+    def tfBaxter(self,localPose):
+    # World frame is "base" for baxter
+        rate = rospy.Rate(10.0)
+        while not rospy.is_shutdown():
+            self.br.sendTransform(self.zeroPose.position,
+                                self.zeroPose.orientation, #Zero point relative to "base"
+                                rospy.Time.now(),
+                                "basePose",   # Transfer to base frame
+                                localPose)   # Transfer from
+
+        try:
+                (trans,rot) = self.listener.lookupTransform('/'+localPose, '/basePose', rospy.Time(0))
+                return trans
+
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                continue
+
+    #The pose at calibration 0 point of our local working frame
+    def zero(self):
+        self.zeroPose = self.getEndPose('right')
 
     # Enable the robot
     # Must be manually called after instantiation 
