@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   message_runtime
   geometry_msgs
+  std_msgs
   rospy
 )
 
@@ -66,6 +67,7 @@ add_message_files(
 generate_messages(
   DEPENDENCIES
   geometry_msgs
+  std_msgs
 )
 
 ###################################

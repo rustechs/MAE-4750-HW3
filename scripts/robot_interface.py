@@ -17,6 +17,7 @@ import baxter_interface
 from bax_hw3.msg import *
 
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Header
 
 from baxter_core_msgs.srv import (
     SolvePositionIK,
@@ -60,8 +61,6 @@ class Baxter():
          # Wait for services to exist
         rospy.wait_for_service(self.nsL)         
         rospy.wait_for_service(self.nsR) 
-
-        self.ikreq = SolvePositionIKRequest()
         #####################################################
 
     # Enable the robot
@@ -233,15 +232,14 @@ class Baxter():
     # Direct call to baxter_interface
     # set_left and set_right are dict({str:float}), same size as joint angles
     def setJoints(self,limbSide,angles):
-        # set_joint_positions(self, positions, False)
+        # move_to_joint_positions(self, positions, False)
         # positions (dict({str:float})) - joint_name:angle command
-        # raw (bool) - advanced, direct position control mode
 
         try:
             if limbSide == 'left':
-                self.left_arm.move_to_joint_positions(angles,False)
+                self.left_arm.move_to_joint_positions(angles)
             elif limbSide == 'right':
-                self.right_arm.move_to_joint_positions(angles,False)
+                self.right_arm.move_to_joint_positions(angles)
             else:
                 raise
         except:
@@ -251,30 +249,24 @@ class Baxter():
 
     # Method for calculating joint angles given a desired end-effector pose
     def getIKGripper(self, limbSide, setPose):
-        # self.ik_gripper(string, "Pose" msg type)
 
         hdr = Header(stamp=rospy.Time.now(), frame_id='base')    #??? 'what's their base frame???
-        PoseStamped(header=hdr,pose=setPose,)
-        self.ikreq.pose_stamp.append(PoseStamped)
+        ps = PoseStamped(header=hdr, pose=setPose,)
+        ikreq = SolvePositionIKRequest(ps, [], 0)
 
         try:
 
             if limbSide == 'left':
-                resp = self.iksvcL(self.ikreq)     #??? What format/type is the service response?
+                resp = self.iksvcL(ikreq)     #??? What format/type is the service response?
             elif limbSide == 'right':
-                resp = self.iksvcR(self.ikreq)
+                resp = self.iksvcR(ikreq)
             else: 
                 rospy.logwarn('Invalid limb side name #: ' + limbSide)
                 raise
         except:
-            rospy.logerr("IK Service call failed: %s" % (e,))
+            rospy.logerr("IK Service call failed: %s" % sys.exc_info()[0])
+            import pdb; pdb.set_trace()
             raise
-        # try:
-        #     rospy.wait_for_service(ns, 5.0)
-        #     resp = iksvc(ikreq)     #??? What format/type ?
-
-        # except (rospy.ServiceException, rospy.ROSException), e:
-        #     rospy.logerr("IK Service call failed: %s" % (e,))
 
         if (resp.isValid[0]):
             print("IK service: SUCCESS - Valid Joint Solution Found for limb-"+str(limbSide)+" :")
@@ -292,5 +284,5 @@ class Baxter():
     def setEndPose(self, limbSide, setPose):
         #setPose = {'position': (x, y, z), 'orientation': (x, y, z, w)}
 
-        ik_joints = self.getIKGripper(self, limbSide, setPose)
+        ik_joints = self.getIKGripper(limbSide, setPose)
         self.setJoints(self,limbSide,ik_joints)

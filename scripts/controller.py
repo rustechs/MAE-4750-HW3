@@ -10,10 +10,9 @@
     moves and coordinate limb motion.
 '''
 
-import rospy, copy, threading
+import rospy, robot_interface, copy, threading
 from bax_hw3.msg import *
 from geometry_msgs.msg import Point, Quaternion, Pose
-from waiter import Waiter
 
 # A simple Block class for legibility.
 class Block():
@@ -30,7 +29,8 @@ class Slot():
 
     # Change a Block's coordinates to match this slot's
     def eat(self, block):
-        block.inSlot.vomit()
+        if not (block.inSlot is None):
+            block.inSlot.vomit()
         block.pos = self.pos
         block.inSlot = self
         self.contains = block
@@ -50,6 +50,7 @@ class Controller():
     def __init__(self):
 
         # Load number of blocks, configuration, bimanual setting
+        print 'Getting parameters from ROS'
         self.h = .044
         self.d = .08
         self.nBlocks = rospy.get_param('num_blocks')
@@ -73,8 +74,7 @@ class Controller():
 
         # Initialize valid table slots - nBlocks slots on either side.
         # Organize in a dictionary.
-        self.slots['left'] = []
-        self.slots['right'] = []
+        self.slots = {'left': [], 'right': []}
         for i in range(self.nBlocks):
             self.slots['left'].append(Slot(-self.d*(i+1), 0, 0))
             self.slots['right'].append(Slot(self.d*(i+1), 0, 0))
@@ -91,20 +91,25 @@ class Controller():
         # Initialize "done" indicator
         self.done = False
 
-        # TODO initialize the Baxter object and home it.
+        # initialize the Baxter object and home it.
         # Note that Baxter should be initialized with his left gripper
         # grasping the top-most block of the initial stack.
+        print 'Connecting to Baxter...'
         self.baxter = robot_interface.Baxter()
+        self.baxter.enable()
+        print 'Connecting to Baxter successful.'
 
         # Initialize the objective by sending a message to self
         self.handleCommand( Command(initstr) )
 
         # This node subscribes to the "command" topic.
         rospy.Subscriber("command", Command, self.handleCommand)
+        print 'Subscriptions successful.'
 
         # Initializes the node (connects to roscore)
         # Setting anonymous to True guaruntees unique node name
-        rospy.init_node('controller_hw3', anonymous = True)
+        # NOTE: ALREADY CALLED IN BAXTER() CONSTRUCTOR
+        # rospy.init_node('controller_hw3', anonymous = True)
 
     # This is the callback for processing incoming command messages.
     def handleCommand(self, cmd):
@@ -210,6 +215,7 @@ class Controller():
 
         # If the stack order matches the objective, express victory
         order = [slot.contains.n for slot in self.stack]
+        import pdb; pdb.set_trace()
         if order == self.objective:
             rospy.loginfo('Objective achieved.')
             # TODO set Baxter face
