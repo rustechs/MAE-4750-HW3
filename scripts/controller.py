@@ -122,7 +122,7 @@ class Controller():
         if initstr == 'stacked_descending':
             self.objective.reverse()
         self.done = False
-        # TODO set Baxter face
+        self.baxter.face('neutral')
         rospy.loginfo('Objective has changed to ' + initstr)
 
     # This method tracks a limb's motion and is meant to run in a seperate
@@ -218,7 +218,7 @@ class Controller():
         import pdb; pdb.set_trace()
         if order == self.objective:
             rospy.loginfo('Objective achieved.')
-            # TODO set Baxter face
+            self.baxter.face('happy')
             self.done = True
             return
 

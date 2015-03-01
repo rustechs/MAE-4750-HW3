@@ -8,10 +8,7 @@
     *Pick-and-place routine that accepts source and destination coordinates
 '''
 
-import argparse 
-import sys       
-
-import rospy
+import argparse, sys, rospy, cv2, cv_bridge
 import baxter_interface
 
 import roslib
@@ -21,13 +18,11 @@ from bax_hw3.msg import *
 
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header
-
 from baxter_core_msgs.srv import (
     SolvePositionIK,
     SolvePositionIKRequest,
 )
-
-
+from sensor_msgs.msg import Image
 
 # The baxter class definition
 # Acts as a wrapper for many useful baxter_interface methods
@@ -64,7 +59,9 @@ class Baxter():
          # Wait for services to exist
         rospy.wait_for_service(self.nsL)         
         rospy.wait_for_service(self.nsR) 
-        
+
+        # Set up publishing to the face
+        self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True)
 
         ######## tf trnaform ########
         #rospy.init_node('baxter_tf_broadcaster')
@@ -98,6 +95,11 @@ class Baxter():
     #The pose at calibration 0 point of our local working frame
     def zero(self):
         self.zeroPose = self.getEndPose('right')
+
+    def face(self, fname):
+        img = cv2.imread(fname + '.png')
+        msg = cb_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
+        self.facepub.publish(msg)
 
     # Enable the robot
     # Must be manually called after instantiation 
