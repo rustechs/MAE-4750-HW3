@@ -9,7 +9,7 @@
 '''
 
 import argparse, sys, rospy, cv2, cv_bridge
-import baxter_interface
+import baxter_interface, rospkg
 
 import roslib
 
@@ -47,11 +47,15 @@ class Baxter():
         # Create baxter gripper instances
         self.right_gripper = baxter_interface.Gripper('right')
         self.left_gripper = baxter_interface.Gripper('left')
+        self.right_gripper.calibrate()
+        self.left_gripper.calibrate()
 
         # Zero to wherever the left end is
         self.zero()
 
         # Set up publishing to the face
+        rospack = rospkg.RosPack()
+        self.impath = rospack.get_path('bax_hw3') + '/img/'
         self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
 
     # Tansformation from a local frame Pose to global frame
@@ -76,9 +80,10 @@ class Baxter():
             self.zeroPose = self.tfBaxter(rel)
 
     def face(self, fname):
-        img = cv2.imread(fname + '.png')
-        #msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
-        #self.facepub.publish(msg)
+        pass
+        img = cv2.imread(self.impath + fname + '.png')
+        msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
+        self.facepub.publish(msg)
 
     # Enable the robot
     # Must be manually called after instantiation 
