@@ -279,7 +279,6 @@ class Baxter():
 
         # Get IK response and convert to joint position dict
         if (resp.isValid[0]):
-            print 'IK service: SUCCESS - Valid Joint Solution Found'
             return dict(zip(resp.joints[0].name, resp.joints[0].position))
         else:
             print("IK service: INVALID POSE - No Valid Joint Solution Found.")

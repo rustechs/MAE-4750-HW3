@@ -103,7 +103,7 @@ class Controller():
 
         # Call the bottom of the stack the origin
         self.baxter.zero()
-        self.baxter.zero(Pose(Point(0,0,-self.nBlocks*self.h),
+        self.baxter.zero(Pose(Point(0,0,-(self.nBlocks-1)*self.h),
                               Quaternion(1,0,0,0) ))
 
         # Initialize the objective by sending a message to self
@@ -133,7 +133,6 @@ class Controller():
     # thread. It toggles flags in the Controller object.
     def pickPlaceThread(self, side, pick, place):
 
-        import pdb; pdb.set_trace()
         rospy.loginfo('Initiate pick with %s from\n%s\nto\n%s' % (side, pick, place))
         # Set up collision/busy flags
         self.busy[side] = True
@@ -233,25 +232,23 @@ class Controller():
 
         # If it is not done, travel up the stack looking for the first stack
         # slot that either contains the wrong block or is empty.
-        for i, slot in enumerate(self.stack):
+        for i, slot in list(enumerate(self.stack)):
 
             rightBlock = self.blocks[self.objective[i]]
 
             # If the slot is empty, place the block that belongs there.
             if slot.isEmpty():
-                import pdb; pdb.set_trace()
                 self.pickPlace(rightBlock, slot)
                 return
 
             # If the slot contains the wrong block, take the top of the stack # off and place it on an available table slot.
             if not (slot.contains is rightBlock):
-                nums = [self.stack[i].contains for i in range(self.nBlocks)]
+                nums = [self.stack[j].contains for j in range(self.nBlocks)]
                 try:
                     indn = nums.index(None) - 1
                 except:
                     indn = len(nums) - 1
-                removeBlock = self.blocks[indn]
-                import pdb; pdb.set_trace()
+                removeBlock = self.stack[indn].contains
                 self.pickPlace(removeBlock, 'table')
                 return
 
