@@ -13,7 +13,7 @@ Then, open a terminal window, connect to Baxter by cd'ing to ros_ws and running
 
 and enable Baxter/open grippers by running
 
-rosrun bax_hw3 enable_gripper.py
+rosrun bax_hw3 enable_open_gripper.py
 
 Finally, you can launch the stacking controller by running
 

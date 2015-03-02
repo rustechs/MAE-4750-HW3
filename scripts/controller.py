@@ -110,8 +110,8 @@ class Controller():
                               Quaternion(1,0,0,0) ))
 
         # Make some convenient rest positions
-        self.rest = {'left': Pose(Point(0,.3,0), Quaternion(1,0,0,0)),
-                     'right': Pose(Point(0,-.3,0), Quaternion(1,0,0,0))}
+        self.rest = {'left': Point(0,.3,0),
+                     'right': Point(0,-.3,0)}
 
         # Initialize the objective by sending a message to self
         self.handleCommand( Command(initstr) )
@@ -160,6 +160,8 @@ class Controller():
         self.move(side, place)
         self.baxter.openGrip( side )
         self.move(side, placeReady)
+        if (place.x == 0) and (place.y == 0):
+            self.move(side, self.rest[side])
 
         # Mark the limb as available and return
         self.busy[side] = False
@@ -179,13 +181,7 @@ class Controller():
 
             # Wait until we have permission, then take it and move.
             while not ( (self.hasStack == side) or (self.hasStack is None) ):
-                # If the other stack has it and isn't busy, move it out of the way!
-                if side == 'left':
-                    other = 'right'
-                else:
-                    other = 'left'
-                if not self.busy[other]:
-                    self.baxter.setEndPose(other, self.rest[other])
+                pass
             self.hasStack = side
             self.baxter.setEndPose( side, Pose(point, noRot) )
 

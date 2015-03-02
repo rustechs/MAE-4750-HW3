@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
-import robot_interface import RobotEnable, Gripper
-import os
+from baxter_interface import RobotEnable, Gripper
+import rospy
 
 if __name__ == '__main__':
+    rospy.init_node('Prepper')
+
     enableObj = RobotEnable()
-    enableObj.
+    enableObj.enable()
 
     lGrip = Gripper('left')
     rGrip = Gripper('right')
 
     lGrip.open()
     rGrip.open()
-    os.system("rosrun baxter_examples gripper_cuff_control.py -g both")
