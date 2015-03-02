@@ -12,5 +12,7 @@ if __name__ == '__main__':
     lGrip = Gripper('left')
     rGrip = Gripper('right')
 
+    lGrip.calibrate()
+    rGrip.calibrate()
     lGrip.open()
     rGrip.open()
