@@ -10,7 +10,7 @@
     moves and coordinate limb motion.
 '''
 
-import rospy, robot_interface, copy, threading
+import rospy, robot_interface, copy, threading, time
 from bax_hw3.msg import *
 from geometry_msgs.msg import Point, Quaternion, Pose
 
@@ -77,8 +77,10 @@ class Controller():
         # Organize in a dictionary.
         self.slots = {'left': [], 'right': []}
         for i in range(self.nBlocks):
+            self.slots['left'].append(Slot(0, .15 + self.d*(i+1), 0))
+            self.slots['right'].append(Slot(0, -.15 -self.d*(i+1), 0))
+        if not self.bimanual:
             self.slots['left'].append(Slot(0, self.d*(i+1), 0))
-            self.slots['right'].append(Slot(0, -self.d*(i+1), 0))
 
         # Initialize a collision prevention variable called "hasStack", which
         # at all times should be maintained with either 'left', 'right', or
@@ -102,9 +104,14 @@ class Controller():
         rospy.loginfo('Connecting to Baxter successful.')
 
         # Call the bottom of the stack the origin
+        #input('Press enter once hand is in place...')
         self.baxter.zero()
         self.baxter.zero(Pose(Point(0,0,-(self.nBlocks-1)*self.h),
                               Quaternion(1,0,0,0) ))
+
+        # Make some convenient rest positions
+        self.rest = {'left': Pose(Point(0,.3,0), Quaternion(1,0,0,0)),
+                     'right': Pose(Point(0,-.3,0), Quaternion(1,0,0,0))}
 
         # Initialize the objective by sending a message to self
         self.handleCommand( Command(initstr) )
@@ -133,7 +140,7 @@ class Controller():
     # thread. It toggles flags in the Controller object.
     def pickPlaceThread(self, side, pick, place):
 
-        rospy.loginfo('Initiate pick with %s from\n%s\nto\n%s' % (side, pick, place))
+        rospy.loginfo('Initiate pick with %s' % side)
         # Set up collision/busy flags
         self.busy[side] = True
 
@@ -172,7 +179,13 @@ class Controller():
 
             # Wait until we have permission, then take it and move.
             while not ( (self.hasStack == side) or (self.hasStack is None) ):
-                pass
+                # If the other stack has it and isn't busy, move it out of the way!
+                if side == 'left':
+                    other = 'right'
+                else:
+                    other = 'left'
+                if not self.busy[other]:
+                    self.baxter.setEndPose(other, self.rest[other])
             self.hasStack = side
             self.baxter.setEndPose( side, Pose(point, noRot) )
 
@@ -190,11 +203,14 @@ class Controller():
 
         # Find or wait for an available limb
         rospy.loginfo('Waiting for limb to become available...')
+        fromStack = block in [s.contains for s in self.stack]
+        leftok = fromStack or (block.inSlot in self.slots['left'])
+        rightok = fromStack or (block.inSlot in self.slots['right'])
         while True:
-            if not self.busy['left']:
+            if (not self.busy['left']) and leftok:
                 side = 'left'
                 break
-            if not self.busy['right']:
+            if (not self.busy['right']) and rightok:
                 side = 'right'
                 break
         rospy.loginfo('Limb %s ready for pick-place.' % side)
@@ -260,8 +276,10 @@ if __name__ == '__main__':
     try:
         controller = Controller()
         while True:
+            time.sleep(1)
             if not controller.done:
                 controller.planMove();
+                
     except:
         import pdb, traceback, sys
         type, value, tb = sys.exc_info()
