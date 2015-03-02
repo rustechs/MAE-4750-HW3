@@ -110,8 +110,8 @@ class Controller():
                               Quaternion(1,0,0,0) ))
 
         # Make some convenient rest positions
-        self.rest = {'left': Point(0,.3,0),
-                     'right': Point(0,-.3,0)}
+        self.rest = {'left': Point(0,.3,.1),
+                     'right': Point(0,-.3,.1)}
 
         # Initialize the objective by sending a message to self
         self.handleCommand( Command(initstr) )
